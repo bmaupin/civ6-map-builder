@@ -2,9 +2,33 @@ import initSqlJs, { type Database } from 'sql.js';
 
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 
+export type Civ6MapInfo = {
+  Height: number;
+  Width: number;
+};
+
+export type Civ6TerrainType =
+  | 'TERRAIN_COAST'
+  | 'TERRAIN_DESERT'
+  | 'TERRAIN_DESERT_HILLS'
+  | 'TERRAIN_DESERT_MOUNTAIN'
+  | 'TERRAIN_GRASS'
+  | 'TERRAIN_GRASS_HILLS'
+  | 'TERRAIN_GRASS_MOUNTAIN'
+  | 'TERRAIN_OCEAN'
+  | 'TERRAIN_PLAINS'
+  | 'TERRAIN_PLAINS_HILLS'
+  | 'TERRAIN_PLAINS_MOUNTAIN'
+  | 'TERRAIN_SNOW'
+  | 'TERRAIN_SNOW_HILLS'
+  | 'TERRAIN_SNOW_MOUNTAIN'
+  | 'TERRAIN_TUNDRA'
+  | 'TERRAIN_TUNDRA_HILLS'
+  | 'TERRAIN_TUNDRA_MOUNTAIN';
+
 export type Civ6MapPlot = {
   ID: number;
-  TerrainType: string;
+  TerrainType: Civ6TerrainType;
 };
 
 export class Civ6Map {
@@ -14,7 +38,7 @@ export class Civ6Map {
     this.db = database;
   }
 
-  static async fromFile(mapFileData: Uint8Array) {
+  static async fromData(mapFileData: Uint8Array) {
     const SQL = await initSqlJs({ locateFile: () => sqlWasmUrl });
     const db = new SQL.Database(mapFileData);
 
@@ -54,14 +78,7 @@ export class Civ6Map {
       ORDER BY ID;`) as Civ6MapPlot[];
   }
 
-  getSize() {
-    const results = this.getResultAsObject('SELECT * FROM Map');
-
-    const result = {
-      height: results?.Height as number,
-      width: results?.Width as number,
-    };
-
-    return result;
+  getInfo() {
+    return this.getResultAsObject('SELECT * FROM Map') as Civ6MapInfo;
   }
 }
