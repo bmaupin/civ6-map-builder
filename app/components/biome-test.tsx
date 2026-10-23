@@ -1,5 +1,5 @@
-import { Input, Label, Surface, TextField } from '@heroui/react';
-import { useState } from 'react';
+import { Button, Input, Label, Surface, TextField } from '@heroui/react';
+import { useRef, useState } from 'react';
 import { AppMap, type GeographicBounds } from '~/utils/appmap';
 
 const endpoint =
@@ -28,60 +28,6 @@ interface ArcGisErrorResponse {
 }
 
 type ClimateZonesApiResponse = ClimateZonesResponse | ArcGisErrorResponse;
-
-// type ClimateZonesResponse = {
-//   features?: Array<{
-//     attributes: {
-//       ECO_NAME: string;
-//       BIOME_NAME: string;
-//     };
-//   }>;
-//   error?: {
-//     code: number;
-//     message: string;
-//     details?: string[];
-//   };
-// };
-
-// // async function getBiomes(latitudeStart: number, longitudeStart: number, latitudeStop: number, longitudeStop: number) {
-// function getBiomes() {
-//   const latitudeStart = 32.288821;
-//   const latitudeStop = 52.925276;
-//   // TODO: dynamic longitude
-//   const longitudeStart = 29.192718;
-//   const longitudeStop = 37.886469;
-
-//   const mapWidth = 36;
-//   const mapHeight = 24;
-
-//   const latitudeDifference = latitudeStop - latitudeStart;
-//   const tileLatitude = latitudeDifference / mapWidth;
-
-//   const longitudeCentre = (longitudeStop - longitudeStart) / 2 + longitudeStart;
-//   console.log('longitudeCentre=', longitudeCentre);
-//   const workingLongitudeStart =
-//     longitudeCentre - (tileLatitude * mapHeight) / 2;
-//   console.log('workingLongitudeStart=', workingLongitudeStart);
-//   // TODO: do we need this?
-//   const workingLongitudeStop = longitudeCentre + (tileLatitude * mapHeight) / 2;
-
-//   // TODO: do first row
-//   const mapY = 0;
-//   for (let mapX = 0; mapX < mapWidth; mapX++) {
-//     const latitude = mapX * tileLatitude + latitudeStart + tileLatitude / 2;
-//     const longitude =
-//       mapY * tileLatitude + workingLongitudeStart + tileLatitude / 2;
-
-//     console.log('latitude=', latitude, 'longitude=', longitude);
-//   }
-
-//   return {
-//     minX: latitudeStart,
-//     minY: workingLongitudeStart,
-//     maxX: latitudeStop,
-//     maxY: workingLongitudeStop,
-//   };
-// }
 
 async function getClimateZones({ west, south, east, north }: GeographicBounds) {
   const params = new URLSearchParams({
@@ -144,7 +90,59 @@ function getClimateAt(
   return null;
 }
 
+const climate2color = {
+  // TERRAIN_COAST: '#16396c',
+  // Desert
+  Arid: '#b18e35',
+  // Plains
+  'Semi-arid': '#90aa6e',
+  // Grassland
+  Mediterranean: '#2b3317',
+};
+
+interface MapPlot {
+  x: number;
+  y: number;
+  climate: string;
+}
+
+function drawMap(
+  canvas: HTMLCanvasElement,
+  width: number,
+  height: number,
+  plots: MapPlot[],
+) {
+  const tileSize = 8;
+
+  canvas.width = width * tileSize;
+  canvas.height = height * tileSize;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Canvas 2D is unavailable');
+  }
+
+  for (const plot of plots) {
+    const x = plot.x;
+    const y = plot.y;
+
+    if (plot.climate) {
+      context.fillStyle = climate2color[plot.climate];
+    } else {
+      context.fillStyle = 'DarkBlue';
+    }
+    context.fillRect(
+      x * tileSize,
+      (height - 1 - y) * tileSize,
+      tileSize,
+      tileSize,
+    );
+  }
+}
+
 export default function BiomeTest() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -156,31 +154,42 @@ export default function BiomeTest() {
       const map = new AppMap({
         dimensions: { height: 24, width: 36 },
         bounds: {
-          // north: 52.925276,
-          // south: 32.288821,
-          // west: 29.192718,
-          // east: 37.886469,
-
-          north: 45,
-          south: 44,
-          west: 33,
-          east: 34,
+          north: 52.925276,
+          south: 32.288821,
+          west: 29.192718,
+          east: 37.886469,
         },
       });
 
-      const result = await getClimateZones(map.getNormalisedBounds());
+      const result = await getClimateZones(map.bounds);
 
       if (result.features.length > 0) {
-        setOutput(JSON.stringify(getClimateAt(result, 33.5, 44.5)));
+        const plots = [];
+        for (let mapY = 0; mapY < map.dimensions.height; mapY++) {
+          const row = [];
+          for (let mapX = 0; mapX < map.dimensions.width; mapX++) {
+            const tileCoordinates = map.getTileCentreCoordinates({
+              x: mapX,
+              y: mapY,
+            });
+            plots.push({
+              x: mapX,
+              y: mapY,
+              climate: getClimateAt(
+                result,
+                tileCoordinates.latitudeY,
+                tileCoordinates.longitudeX,
+              ),
+            });
+          }
+        }
+
+        const canvas = canvasRef.current;
+        canvas &&
+          drawMap(canvas, map.dimensions.width, map.dimensions.height, plots);
       } else {
         setOutput('No climate data found at this location');
       }
-
-      // setOutput(
-      //   result.features.length > 0
-      //     ? JSON.stringify(result, null, 2)
-      //     : 'No ecoregion found at this location.',
-      // );
     } catch (error) {
       setOutput(
         `Error: ${error instanceof Error ? error.message : String(error)}`,
@@ -237,10 +246,16 @@ export default function BiomeTest() {
         </TextField>
       </Surface> */}
       <div>
-        <button onClick={handleLookup} disabled={loading}>
-          {loading ? 'Loading…' : 'Look up biome'}
-        </button>
+        <Button onClick={handleLookup} disabled={loading}>
+          {loading ? 'Loading…' : 'Generate map'}
+        </Button>
         <pre role="status">{output}</pre>
+        <canvas
+          id="map-preview"
+          ref={canvasRef}
+          aria-label="Map terrain preview"
+          style={{ maxWidth: '100%', height: 'auto' }}
+        />
       </div>
     </main>
   );

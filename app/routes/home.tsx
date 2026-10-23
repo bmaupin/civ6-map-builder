@@ -4,6 +4,7 @@ import mapUrl from '../../data/Empty 36x24.Civ6Map?url';
 // import mapUrl from '../../data/Sumeria.Civ6Map?url';
 import { Civ6Map } from '~/utils/civ6map';
 import MapPreview from '~/components/map-preview';
+import BiomeTest from '~/components/biome-test';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -26,6 +27,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   return (
     <div>
       <MapPreview map={loaderData} />
+      <BiomeTest />
     </div>
   );
 }

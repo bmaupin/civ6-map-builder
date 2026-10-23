@@ -1,13 +1,23 @@
-interface MapDimensions {
-  height: number;
-  width: number;
-}
-
 export interface GeographicBounds {
   north: number;
   south: number;
   west: number;
   east: number;
+}
+
+interface MapDimensions {
+  height: number;
+  width: number;
+}
+
+interface MapCoordinates {
+  latitudeY: number;
+  longitudeX: number;
+}
+
+interface TileCoordinates {
+  x: number;
+  y: number;
 }
 
 interface AppMapProperties {
@@ -19,56 +29,53 @@ interface AppMapProperties {
 // generate a Civ6Map file
 export class AppMap {
   readonly dimensions: Readonly<MapDimensions>;
-  readonly requestedBounds: Readonly<GeographicBounds>;
+  readonly bounds: Readonly<GeographicBounds>;
+  // TODO: This is a hack to represent width/height of a tile in latitude
+  readonly tileToLatitudeHack: Readonly<number>;
 
   constructor({ dimensions, bounds }: AppMapProperties) {
     this.dimensions = dimensions;
-    this.requestedBounds = bounds;
+    [this.bounds, this.tileToLatitudeHack] = this.normaliseBounds(bounds);
   }
 
-  getNormalisedBounds(): GeographicBounds {
-    // TODO
-    // south = 32.288821;
-    // north = 52.925276;
-    // TODO: dynamic longitude
-    // const west = 29.192718;
-    // const east = 37.886469;
-
-    // const mapWidth = 36;
-    // const mapHeight = 24;
-
-    // TODO: this normalises north/south; we should also be able to handle east/west normalisation
-    const latitudeDifference =
-      this.requestedBounds.north - this.requestedBounds.south;
-    const tileLatitude = latitudeDifference / this.dimensions.width;
+  // TODO: this only normalises north/south; we should also be able to handle east/west normalisation
+  private normaliseBounds(
+    requestedBounds: GeographicBounds,
+  ): [GeographicBounds, number] {
+    const tileLatitude =
+      (requestedBounds.north - requestedBounds.south) / this.dimensions.width;
 
     const longitudeCentre =
-      (this.requestedBounds.east - this.requestedBounds.west) / 2 +
-      this.requestedBounds.west;
-    console.log('longitudeCentre=', longitudeCentre);
+      (requestedBounds.east - requestedBounds.west) / 2 + requestedBounds.west;
     const normalisedWest =
       longitudeCentre - (tileLatitude * this.dimensions.height) / 2;
-    console.log('normalisedWest=', normalisedWest);
-    // TODO: do we need this?
     const normalisedEast =
       longitudeCentre + (tileLatitude * this.dimensions.height) / 2;
 
-    // // TODO: do first row
-    // const mapY = 0;
-    // for (let mapX = 0; mapX < this.dimensions.width; mapX++) {
-    //   const latitude =
-    //     mapX * tileLatitude + this.requestedBounds.south + tileLatitude / 2;
-    //   const longitude =
-    //     mapY * tileLatitude + normalisedWest + tileLatitude / 2;
+    return [
+      {
+        south: requestedBounds.south,
+        west: normalisedWest,
+        north: requestedBounds.north,
+        east: normalisedEast,
+      },
+      tileLatitude,
+    ];
+  }
 
-    //   console.log('latitude=', latitude, 'longitude=', longitude);
-    // }
+  getTileCentreCoordinates(tileCoordinates: TileCoordinates): MapCoordinates {
+    const latitudeY =
+      tileCoordinates.x * this.tileToLatitudeHack +
+      this.bounds.south +
+      this.tileToLatitudeHack / 2;
+    const longitudeX =
+      tileCoordinates.y * this.tileToLatitudeHack +
+      this.bounds.west +
+      this.tileToLatitudeHack / 2;
 
     return {
-      south: this.requestedBounds.south,
-      west: normalisedWest,
-      north: this.requestedBounds.north,
-      east: normalisedEast,
+      latitudeY,
+      longitudeX,
     };
   }
 }
